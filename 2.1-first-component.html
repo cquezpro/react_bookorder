@@ -7,9 +7,13 @@
 </head>
 <body>
 
+  <div id="modalAlertTimeout">
+  </div>
   <!-- container node -->
   <div id="app"></div>
 
+  <script src="./libs/jquery-2.2.0.min.js"></script>
+  <script src="./libs/bootstrap.min.js"></script>
   <script src="./libs/react-0.14.6.min.js"></script>
   <script src="./libs/react-dom-0.14.6.min.js"></script>
   <script src="./libs/JSXTransformer-0.13.3.js"></script>
@@ -19,9 +23,75 @@
   <!--<script type="text/babel">-->
   <script type="text/jsx">
 
+  var SetIntervalMixin = {
+    componentWillMount: function() {
+      this.intervals = [];
+    },
+    setInterval: function() {
+      this.intervals.push(setInterval.apply(null, arguments));
+    },
+    componentWillUnmount: function() {
+      this.intervals.map(clearInterval);
+    }
+  };
+
+  var CartTimeoutMixin = {
+    componentWillMount: function () {
+      this.setInterval(this.decrementCartTimer, 1000);
+    },
+    decrementCartTimer(){
+      if (this.state.cartTimeout == 0) {
+          this.props.alertCartTimeout();
+          return;
+      }
+      this.setState({cartTimeout: this.state.cartTimeout - 1});
+    },
+    componentWillUnmount: function() {
+      this.props.updateCartTimeout(this.state.cartTimeout);
+    }
+  };
+
+  var ModalAlertTimeout = React.createClass({
+    componentDidMount(){
+      setTimeout(()=> {
+        let timeoutModal = this.refs.timeoutModal.getDOMNode();
+        $(timeoutModal).modal('show');
+        $(timeoutModal).on('hidden.bs.modal', this.unMountComponent);
+      }, 100);
+    },
+    unMountComponent () {
+        React.unmountComponentAtNode(this.getDOMNode().parentNode);
+    },
+    render() {
+      return (
+        <div className="modal fade" ref='timeoutModal'>
+          <div className="modal-dialog">
+            <div className="modal-content">
+                <div className="modal-header">
+                    <button type="button" className="close" datadismiss="modal" aria-label="Close"><span aria-hidden="true">×</span>
+                    </button>
+                    <h4 className="modal-title">Timeout</h4>
+                </div>
+                <div className="modal-body">
+                  <p>The cart has timed-out. Please try again!</p>
+                </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  });
+
   var BookStore = React.createClass({
       getInitialState() {
-        return ({ currentStep: 1, formValues: {}  });
+        return ({ currentStep: 1, formValues: {}, cartTimeout: 3 * 1 });
+      },
+      updateCartTimeout(timeout) {
+        this.setState({cartTimeout: timeout});
+      },
+      alertCartTimeout() {
+        this.setState({currentStep: 1, formValues: {}, cartTimeout: 1});
+        React.render(<ModalAlertTimeout />, document.getElementById('modalAlertTimeout'));
       },
       updateFormData(formData) {
         var formValues = Object.assign({}, this.state.formValues, formData);
@@ -34,13 +104,16 @@
           case 1:
               return <BookList updateFormData={this.updateFormData} />;
           case 2:
-              return <ShippingDetails updateFormData={this.updateFormData} />;
+              return <ShippingDetails updateFormData={this.updateFormData} cartTimeout={this.state.cartTimeout} updateCartTimeout={this.updateCartTimeout}  alertCartTimeout={this.alertCartTimeout}/>;
           case 3:
-              return <DeliveryDetails updateFormData={this.updateFormData} />;
+              return <DeliveryDetails updateFormData={this.updateFormData} cartTimeout={this.state.cartTimeout} updateCartTimeout={this.updateCartTimeout}  alertCartTimeout={this.alertCartTimeout}/>;
           case 4:
-              return <Confirmation data={this.state.formValues} updateFormData={this.updateFormData}/>;
+              return <Confirmation data={this.state.formValues} updateFormData={this.updateFormData} />;
           case 5:
               return <Success data={this.state.formValues} />;
+          case 10:
+              /* Handle the case of Cart timeout */
+              return <div><h2>Your cart timed out, Please try again!</h2></div>;
           default:
               return <BookList updateFormData={this.updateFormData} />;
         }
@@ -247,9 +320,10 @@
   });
 
   var DeliveryDetails = React.createClass({
+    mixins: [SetIntervalMixin, CartTimeoutMixin],
     getInitialState() {
       return (
-        { deliveryOption: 'Primary' }
+        { deliveryOption: 'Primary', cartTimeout: this.props.cartTimeout }
       );
     },
     handleChange(event) {
@@ -260,6 +334,8 @@
         this.props.updateFormData(this.state);
     },
     render() {
+      var minutes = Math.floor(this.state.cartTimeout / 60);
+      var seconds = this.state.cartTimeout - minutes * 60;
       return (
         <div>
           <h1>Choose your delivery options here.</h1>
@@ -281,6 +357,10 @@
                 Submit
               </button>
             </form>
+          </div>
+          <div className="well">
+            <span className="glyphicon glyphicon-time" ariahidden="true"></span>
+            You have {minutes} Minutes, {seconds} Seconds, before confirming order
           </div>
         </div>
       );
