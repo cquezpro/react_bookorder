@@ -1,2 +1,2 @@
 # react_bookorder
-Book Order Sample with Reactjs
+Book Order Sample with React.js
